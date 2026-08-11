@@ -17,8 +17,46 @@
 // exactly like config.ts's registry.onStatus() already does for its own
 // broader `+/status` subscription.
 
+import type { MqttClient } from 'mqtt';
 import { parseState, PayloadError } from './payload';
 import type { NodeRedNode, NodeRedRuntime, PlaiiinlightConfigNode } from './red';
+
+// Multiple `plaiiinlight-state` nodes (and, in principle, other node types)
+// can share one `plaiiinlight-config` node's MQTT client and target the same
+// lamp — e.g. two state nodes both watching `tower8`. The client itself has
+// no concept of "how many subscribers want this topic", so without a
+// refcount here, closing ONE of those nodes would call `client.unsubscribe()`
+// on a topic the OTHER node still depends on, silently killing its broker
+// delivery until the next full redeploy. Keyed by the actual client object
+// (WeakMap, so it never needs explicit cleanup when a config node's old
+// client is replaced/GC'd) -> topic -> number of nodes currently subscribed.
+const subscriptionRefcounts = new WeakMap<MqttClient, Map<string, number>>();
+
+function retainSubscriptions(client: MqttClient, topics: string[]): void {
+  let counts = subscriptionRefcounts.get(client);
+  if (!counts) {
+    counts = new Map<string, number>();
+    subscriptionRefcounts.set(client, counts);
+  }
+  for (const topic of topics) counts.set(topic, (counts.get(topic) ?? 0) + 1);
+}
+
+/** Returns only the topics whose refcount just dropped to zero — the ones actually safe to unsubscribe. */
+function releaseSubscriptions(client: MqttClient, topics: string[]): string[] {
+  const counts = subscriptionRefcounts.get(client);
+  if (!counts) return topics; // no record — fall back to unsubscribing everything requested
+  const toUnsubscribe: string[] = [];
+  for (const topic of topics) {
+    const next = (counts.get(topic) ?? 1) - 1;
+    if (next <= 0) {
+      counts.delete(topic);
+      toUnsubscribe.push(topic);
+    } else {
+      counts.set(topic, next);
+    }
+  }
+  return toUnsubscribe;
+}
 
 interface StateNodeDef {
   config: string;
@@ -111,20 +149,27 @@ export = function (RED: NodeRedRuntime): void {
     };
 
     client.on('message', onMessage);
+    retainSubscriptions(client, topics);
     client.subscribe(topics, (err) => {
       if (err) node.error(`plaiiinlight-state: failed to subscribe: ${err.message}`);
     });
 
     node.on('close', (done: () => void) => {
       client.removeListener('message', onMessage);
-      // Best-effort — the shared client may already be disconnecting (e.g.
-      // the config node closes around the same time on redeploy/undeploy),
-      // in which case there's nothing to unsubscribe from. Never end the
-      // shared client itself; other nodes may still be using it.
-      try {
-        client.unsubscribe(topics);
-      } catch {
-        // ignore — client already gone
+      // Only unsubscribe topics no other state node on this same shared
+      // client still needs (see subscriptionRefcounts above) — otherwise a
+      // sibling node watching the same lamp would go silent.
+      const topicsToUnsubscribe = releaseSubscriptions(client, topics);
+      if (topicsToUnsubscribe.length > 0) {
+        // Best-effort — the shared client may already be disconnecting (e.g.
+        // the config node closes around the same time on redeploy/undeploy),
+        // in which case there's nothing to unsubscribe from. Never end the
+        // shared client itself; other nodes may still be using it.
+        try {
+          client.unsubscribe(topicsToUnsubscribe);
+        } catch {
+          // ignore — client already gone
+        }
       }
       done();
     });

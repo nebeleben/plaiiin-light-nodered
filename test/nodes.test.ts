@@ -387,4 +387,51 @@ describe('plaiiinlight-state node', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(messageCount).toBe(0);
   });
+
+  it('keeps a sibling same-lamp state node subscribed after one of them closes (subscription refcount)', async () => {
+    // Two state nodes, same config node, same lamp — both share n1's MQTT
+    // client and both subscribe to the exact same topics. Removing n2 alone
+    // (e.g. deleting one of two duplicate state nodes) must not tear down
+    // the broker subscription n4 still depends on.
+    const configDef = {
+      id: 'n1',
+      type: CONFIG_NODE_TYPE,
+      name: 'test broker',
+      host: '127.0.0.1',
+      port,
+      tls: false,
+      prefix: 'plaiiinlight',
+    };
+    const stateA = { id: 'n2', type: STATE_NODE_TYPE, name: 'state A', config: 'n1', lamp: 'tower8', wires: [['n3']] };
+    const helperA = { id: 'n3', type: 'helper' };
+    const stateB = { id: 'n4', type: STATE_NODE_TYPE, name: 'state B', config: 'n1', lamp: 'tower8', wires: [['n5']] };
+    const helperB = { id: 'n5', type: 'helper' };
+
+    const subscribed = waitForSubscribe('plaiiinlight/tower8/color/get');
+    await helper.load([configNode, stateNode], [configDef, stateA, helperA, stateB, helperB], {});
+    await subscribed;
+
+    // Redeploy with n2/n3 dropped from the flow — a "modified nodes" deploy
+    // (the same partial-redeploy path the real Node-RED editor uses when you
+    // delete one node and hit Deploy), which stops only the removed/changed
+    // nodes and leaves n1/n4/n5 running untouched. This exercises exactly
+    // the scenario from the review finding: one same-lamp state node closes
+    // while its sibling stays deployed.
+    await helper.setFlows([configDef, stateB, helperB], 'nodes');
+
+    const n5 = helper.getNode('n5') as any;
+    const received = new Promise<any>((resolve) => n5.on('input', resolve));
+
+    await new Promise<void>((resolve, reject) => {
+      broker.publish(
+        { topic: 'plaiiinlight/tower8/color/get', payload: Buffer.from('0,100,100'), qos: 0, retain: false },
+        (err) => (err ? reject(err) : resolve()),
+      );
+    });
+
+    const msg = await received;
+    expect(msg.topic).toBe('tower8');
+    expect(msg.changed).toBe('color');
+    expect(msg.payload.color.hex).toBe('#ff0000');
+  });
 });
