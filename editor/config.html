@@ -1,0 +1,81 @@
+<!--
+  plaiiinlight-config — broker + discovery config node.
+
+  Registers the config-node type and its edit panel. The editor-side JS here
+  never talks MQTT directly — it only edits the node's config/credentials;
+  the actual connection and lamp discovery happen in dist/config.js on the
+  runtime side (see src/config.ts).
+-->
+<script type="text/html" data-template-name="plaiiinlight-config">
+    <div class="form-row">
+        <label for="node-config-input-host"><i class="fa fa-globe"></i> Broker host</label>
+        <input type="text" id="node-config-input-host" placeholder="127.0.0.1">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-port"><i class="fa fa-random"></i> Port</label>
+        <input type="text" id="node-config-input-port" placeholder="1883" style="width: 100px">
+    </div>
+    <div class="form-row">
+        <input type="checkbox" id="node-config-input-tls" style="display: inline-block; width: auto; vertical-align: top;">
+        <label for="node-config-input-tls" style="width: 70%;">Use TLS (mqtts://)</label>
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-prefix"><i class="fa fa-sitemap"></i> Topic prefix</label>
+        <input type="text" id="node-config-input-prefix" placeholder="plaiiinlight">
+    </div>
+    <hr>
+    <div class="form-row">
+        <label for="node-config-input-username"><i class="fa fa-user"></i> Username</label>
+        <input type="text" id="node-config-input-username">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-password"><i class="fa fa-lock"></i> Password</label>
+        <input type="password" id="node-config-input-password">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="PlaiiinLightOS broker">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="plaiiinlight-config">
+    <p>Shared MQTT connection and lamp-discovery hub for PlaiiinLightOS command and state nodes.</p>
+    <p>Owns a single MQTT client to the local lamp fleet broker (connected lazily, on first use by a
+    dependent node) and subscribes to <code>&lt;prefix&gt;/+/status</code> to track which lamps are online,
+    which powers the lamp picker in the command/state node edit panels.</p>
+    <h3>Details</h3>
+    <dl class="message-properties">
+        <dt>host</dt>
+        <dd>the MQTT broker's hostname or IP address.</dd>
+        <dt>port <span class="property-type">number</span></dt>
+        <dd>the MQTT broker's port. Defaults to <code>1883</code>.</dd>
+        <dt>tls <span class="property-type">boolean</span></dt>
+        <dd>connect with <code>mqtts://</code> instead of <code>mqtt://</code>.</dd>
+        <dt>prefix</dt>
+        <dd>the base MQTT topic prefix lamps publish/subscribe under. Defaults to <code>plaiiinlight</code>,
+        matching the firmware's default.</dd>
+        <dt>username / password</dt>
+        <dd>optional MQTT broker credentials, stored via Node-RED's encrypted credential store
+        (never written into the exported flow JSON).</dd>
+    </dl>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('plaiiinlight-config', {
+        category: 'config',
+        defaults: {
+            host: { value: '', required: true },
+            port: { value: 1883, required: true, validate: RED.validators.number() },
+            tls: { value: false },
+            prefix: { value: 'plaiiinlight', required: true },
+            name: { value: '' }
+        },
+        credentials: {
+            username: { type: 'text' },
+            password: { type: 'password' }
+        },
+        label: function () {
+            return this.name || `${this.host}:${this.port}`;
+        }
+    });
+</script>
