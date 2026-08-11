@@ -1,0 +1,26 @@
+# Runs on the PUBLIC repo (nebeleben/plaiiin-light-nodered): build + test on
+# every mirrored push and on PRs. The package root here is the monorepo's
+# nodered/ subtree (mirrored by nodered-mirror.yml, which renames
+# public-repo/ -> .github/workflows/). Node 22 matches release.yml.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
