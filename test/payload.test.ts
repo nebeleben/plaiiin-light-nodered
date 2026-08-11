@@ -42,6 +42,26 @@ describe('colorToHsvPayload', () => {
     expect(colorToHsvPayload('#ffffff')).toBe('0,0,100');
     expect(colorToHsvPayload('#000000')).toBe('0,0,0');
   });
+
+  it('throws PayloadError on a non-finite field in an {h,s,v} object', () => {
+    expect(() => colorToHsvPayload({ h: NaN, s: 50, v: 50 })).toThrow(PayloadError);
+  });
+
+  it('throws PayloadError on a non-finite field in an {r,g,b} object', () => {
+    expect(() => colorToHsvPayload({ r: NaN, g: 0, b: 0 })).toThrow(PayloadError);
+  });
+
+  it('throws PayloadError on an Infinity field', () => {
+    expect(() => colorToHsvPayload({ h: Infinity, s: 50, v: 50 })).toThrow(PayloadError);
+    expect(() => colorToHsvPayload({ r: 0, g: -Infinity, b: 0 })).toThrow(PayloadError);
+  });
+
+  it('clamps (does not throw) a finite out-of-range value', () => {
+    // Regression guard: the NaN/Infinity fix must not start rejecting
+    // legitimate out-of-range-but-finite numbers — those still clamp,
+    // matching the firmware's own clamp-not-reject behavior.
+    expect(colorToHsvPayload({ h: 999, s: 50, v: 50 })).toBe('360,50,50');
+  });
 });
 
 describe('rgbToHsv / hsvToRgb (firmware-matching round-trip)', () => {

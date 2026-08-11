@@ -58,9 +58,24 @@ function clampByte(n: number): number {
   return clamp(Math.round(n), 0, 255);
 }
 
+// Guards a numeric field before it reaches clamp()/rounding — clamp() would
+// otherwise silently let NaN/Infinity through into the output payload
+// instead of failing loud, unlike every other invalid-input path in this
+// module (see brightnessToPayload). Only non-finite values throw; a legit
+// out-of-range finite number (e.g. h: 999) still clamps as before.
+function requireFinite(name: string, value: number): number {
+  if (!Number.isFinite(value)) {
+    throw new PayloadError(`Invalid ${name}: ${value}`);
+  }
+  return value;
+}
+
 // --- rgb <-> hsv, ported from lampos/main/plaiiin_mqtt.c ---
 
 export function hsvToRgb(h: number, s: number, v: number): RGB {
+  requireFinite('h', h);
+  requireFinite('s', s);
+  requireFinite('v', v);
   h = clamp(h, 0, 360);
   s = clamp(s, 0, 100);
   v = clamp(v, 0, 100);
@@ -97,6 +112,9 @@ export function hsvToRgb(h: number, s: number, v: number): RGB {
 }
 
 export function rgbToHsv(r: number, g: number, b: number): HSV {
+  requireFinite('r', r);
+  requireFinite('g', g);
+  requireFinite('b', b);
   r = clampByte(r);
   g = clampByte(g);
   b = clampByte(b);
@@ -144,6 +162,9 @@ function parseNumberTriple(s: string): [number, number, number] | null {
 }
 
 function hsvFromTriple(h: number, s: number, v: number): HSV {
+  requireFinite('h', h);
+  requireFinite('s', s);
+  requireFinite('v', v);
   return {
     h: clamp(Math.round(h), 0, 360),
     s: clamp(Math.round(s), 0, 100),
