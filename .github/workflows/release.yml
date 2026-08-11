@@ -1,0 +1,48 @@
+# Runs on the PUBLIC repo (nebeleben/plaiiin-light-nodered), where this
+# monorepo's nodered/ subtree is the root (mirrored by nodered-mirror.yml,
+# which renames public-repo/ -> .github/workflows/).
+#
+# Trigger: tag vX.Y.Z, pushed by the mirror when nodered-vX.Y.Z is tagged on
+# the monorepo. Verifies the tag matches package.json, builds, tests, and
+# publishes to npm via TRUSTED PUBLISHING (OIDC): npm exchanges this job's
+# GitHub Actions identity token for publish rights — no NPM_TOKEN secret, no
+# 2FA/OTP involvement. Configured on npmjs.com -> node-red-contrib-plaiiinlight
+# -> Settings -> Trusted Publisher (owner nebeleben, repo plaiiin-light-nodered,
+# workflow release.yml). Provenance is generated automatically with OIDC.
+#
+# NOTE: no `registry-url` on setup-node — that would write an .npmrc requiring
+# a NODE_AUTH_TOKEN env var, which breaks tokenless OIDC publishing. Trusted
+# publishing needs npm >= 11.5, newer than what the runner's Node bundles —
+# hence the npm upgrade step.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write   # OIDC token for npm trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Upgrade npm (trusted publishing needs >= 11.5)
+        run: npm install -g npm@latest
+      - name: Verify tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "tag $TAG != package.json $PKG" >&2
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm publish --access public
