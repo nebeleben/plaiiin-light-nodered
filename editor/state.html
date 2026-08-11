@@ -1,0 +1,95 @@
+<!--
+  plaiiinlight-state — tracks power/color/brightness/mode/online state for a
+  single lamp over a plaiiinlight-config node's shared MQTT connection, and
+  emits a merged state message on every update.
+
+  The editor-side JS here never talks MQTT directly. The one bit of runtime
+  interaction it does is fetching the live lamp list from the config node's
+  `/plaiiinlight/:id/lamps` admin endpoint (registered in src/config.ts) to
+  populate the lamp datalist — manual entry is always still allowed, since a
+  lamp may not have announced itself yet when the flow is being edited.
+-->
+<script type="text/html" data-template-name="plaiiinlight-state">
+    <div class="form-row">
+        <label for="node-input-config"><i class="fa fa-server"></i> Config</label>
+        <input type="text" id="node-input-config">
+    </div>
+    <div class="form-row">
+        <label for="node-input-lamp"><i class="fa fa-lightbulb-o"></i> Lamp</label>
+        <input type="text" id="node-input-lamp" list="node-input-lamp-list" placeholder="tower8">
+        <datalist id="node-input-lamp-list"></datalist>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="plaiiinlight-state">
+    <p>Tracks power/color/brightness/mode/online state for one lamp, over the shared MQTT
+    connection owned by a <code>plaiiinlight-config</code> node.</p>
+    <h3>Details</h3>
+    <dl class="message-properties">
+        <dt>lamp</dt>
+        <dd>the target lamp's MQTT node name (e.g. <code>tower8</code>). Pick from the dropdown of
+        lamps the config node has already discovered, or type one in manually.</dd>
+    </dl>
+    <p>Subscribes to <code>&lt;prefix&gt;/&lt;lamp&gt;/status</code> and
+    <code>&lt;prefix&gt;/&lt;lamp&gt;/{power,color,brightness,mode}/get</code>. Every time one of
+    those topics updates, this node merges the change into a running state object and sends it
+    on.</p>
+    <h3>Outputs</h3>
+    <dl class="message-properties">
+        <dt>payload.online <span class="property-type">boolean</span></dt>
+        <dd>whether the lamp is currently reachable (from its retained <code>status</code> topic).</dd>
+        <dt>payload.power <span class="property-type">boolean</span></dt>
+        <dd>on/off.</dd>
+        <dt>payload.color <span class="property-type">object</span></dt>
+        <dd><code>{h, s, v, r, g, b, hex}</code> — the lamp's current base color.</dd>
+        <dt>payload.brightness <span class="property-type">number</span></dt>
+        <dd>0-255.</dd>
+        <dt>payload.mode <span class="property-type">string</span></dt>
+        <dd><code>color</code> | <code>js</code> | <code>stream</code>.</dd>
+        <dt>changed <span class="property-type">string</span></dt>
+        <dd>which of the keys above just changed and triggered this message.</dd>
+    </dl>
+    <h3>Status</h3>
+    <p>Green dot: lamp online. Grey ring: lamp offline, or nothing heard yet. Red ring: the node
+    isn't configured (missing config node or lamp).</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('plaiiinlight-state', {
+        category: 'PlaiiinLightOS',
+        defaults: {
+            name: { value: '' },
+            config: { value: '', type: 'plaiiinlight-config', required: true },
+            lamp: { value: '', required: true }
+        },
+        inputs: 0,
+        outputs: 1,
+        icon: 'font-awesome/fa-info-circle',
+        label: function () {
+            return this.name || (this.lamp ? `${this.lamp}: state` : 'plaiiinlight-state');
+        },
+        oneditprepare: function () {
+            const node = this;
+
+            function populateLamps(configId) {
+                const $datalist = $('#node-input-lamp-list');
+                $datalist.empty();
+                if (!configId) return;
+                $.getJSON('plaiiinlight/' + configId + '/lamps', function (lamps) {
+                    (lamps || []).forEach(function (lamp) {
+                        $('<option>').val(lamp.node).appendTo($datalist);
+                    });
+                });
+            }
+
+            populateLamps(node.config);
+            $('#node-input-config').on('change', function () {
+                populateLamps($(this).val());
+            });
+        }
+    });
+</script>

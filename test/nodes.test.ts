@@ -18,9 +18,11 @@ helper.init(require.resolve('node-red'));
 // vitest/esbuild, so it never depends on the built dist/config.js).
 import configNode from '../src/config';
 import commandNode from '../src/command';
+import stateNode from '../src/state';
 
 const CONFIG_NODE_TYPE = 'plaiiinlight-config';
 const COMMAND_NODE_TYPE = 'plaiiinlight-command';
+const STATE_NODE_TYPE = 'plaiiinlight-state';
 
 describe('plaiiinlight-config node', () => {
   let broker: InstanceType<typeof Aedes>;
@@ -244,5 +246,145 @@ describe('plaiiinlight-command node', () => {
     broker.removeListener('publish', onPublish);
     expect(statusEvents[0]).toEqual(expect.objectContaining({ fill: 'red' }));
     expect(publishedToLamp).toBe(false);
+  });
+});
+
+describe('plaiiinlight-state node', () => {
+  let broker: InstanceType<typeof Aedes>;
+  let server: Server;
+  let port: number;
+
+  beforeEach(async () => {
+    broker = new Aedes();
+    server = createServer(broker.handle);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (address === null || typeof address === 'string') {
+      throw new Error('expected an AddressInfo from the ephemeral listener');
+    }
+    port = address.port;
+  });
+
+  afterEach(async () => {
+    await helper.unload();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => broker.close(() => resolve()));
+  });
+
+  function testFlow(state: Record<string, unknown> = {}) {
+    return [
+      {
+        id: 'n1',
+        type: CONFIG_NODE_TYPE,
+        name: 'test broker',
+        host: '127.0.0.1',
+        port,
+        tls: false,
+        prefix: 'plaiiinlight',
+      },
+      {
+        id: 'n2',
+        type: STATE_NODE_TYPE,
+        name: 'test state',
+        config: 'n1',
+        lamp: 'tower8',
+        wires: [['n3']],
+        ...state,
+      },
+      { id: 'n3', type: 'helper' },
+    ];
+  }
+
+  // The shared MQTT client connects (and this node subscribes) lazily, so
+  // wait for the broker to actually see the SUBSCRIBE for the exact topic
+  // before publishing — same rationale as command.ts's waitForPublish, and
+  // registered before helper.load() so there's no race with the node's own
+  // (synchronous, but async-flushed) subscribe call in its constructor.
+  function waitForSubscribe(topic: string): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const onSubscribe = (subscriptions: Array<{ topic: string }>) => {
+        if (subscriptions.some((s) => s.topic === topic)) {
+          broker.removeListener('subscribe', onSubscribe);
+          resolve();
+        }
+      };
+      broker.on('subscribe', onSubscribe);
+    });
+  }
+
+  it('parses color/get off the shared client and emits merged state with color.hex', async () => {
+    const subscribed = waitForSubscribe('plaiiinlight/tower8/color/get');
+    await helper.load([configNode, stateNode], testFlow(), {});
+    await subscribed;
+
+    const n3 = helper.getNode('n3') as any;
+    const received = new Promise<any>((resolve) => n3.on('input', resolve));
+
+    await new Promise<void>((resolve, reject) => {
+      broker.publish(
+        { topic: 'plaiiinlight/tower8/color/get', payload: Buffer.from('0,100,100'), qos: 0, retain: false },
+        (err) => (err ? reject(err) : resolve()),
+      );
+    });
+
+    const msg = await received;
+    expect(msg.topic).toBe('tower8');
+    expect(msg.changed).toBe('color');
+    expect(msg.payload.color.hex).toBe('#ff0000');
+  });
+
+  it('marks the node grey and payload.online false on an offline status', async () => {
+    const subscribed = waitForSubscribe('plaiiinlight/tower8/status');
+    await helper.load([configNode, stateNode], testFlow(), {});
+    await subscribed;
+
+    const n2 = helper.getNode('n2') as any;
+    const n3 = helper.getNode('n3') as any;
+
+    const statusEvents: Array<{ fill?: string }> = [];
+    n2.on('call:status', (call: { args: [{ fill?: string }] }) => statusEvents.push(call.args[0]));
+
+    const received = new Promise<any>((resolve) => n3.on('input', resolve));
+
+    await new Promise<void>((resolve, reject) => {
+      broker.publish(
+        { topic: 'plaiiinlight/tower8/status', payload: Buffer.from('offline'), qos: 0, retain: false },
+        (err) => (err ? reject(err) : resolve()),
+      );
+    });
+
+    const msg = await received;
+    expect(msg.changed).toBe('online');
+    expect(msg.payload.online).toBe(false);
+
+    await vi.waitFor(() => {
+      expect(statusEvents.length).toBeGreaterThan(0);
+    });
+    expect(statusEvents[statusEvents.length - 1]).toEqual(expect.objectContaining({ fill: 'grey' }));
+  });
+
+  it('unsubscribes and stops emitting after the node is closed', async () => {
+    const subscribed = waitForSubscribe('plaiiinlight/tower8/power/get');
+    await helper.load([configNode, stateNode], testFlow(), {});
+    await subscribed;
+
+    const n3 = helper.getNode('n3') as any;
+    let messageCount = 0;
+    n3.on('input', () => {
+      messageCount += 1;
+    });
+
+    await helper.unload();
+
+    await new Promise<void>((resolve, reject) => {
+      broker.publish(
+        { topic: 'plaiiinlight/tower8/power/get', payload: Buffer.from('1'), qos: 0, retain: false },
+        (err) => (err ? reject(err) : resolve()),
+      );
+    });
+
+    // Give any (unwanted) delivery a moment to land before asserting none did.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(messageCount).toBe(0);
   });
 });
