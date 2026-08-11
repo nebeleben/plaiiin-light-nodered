@@ -1,14 +1,29 @@
 {
   "name": "node-red-contrib-plaiiinlight",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Node-RED palette for PlaiiinLightOS lamps — config, command and state nodes over local MQTT.",
   "license": "Apache-2.0",
   "type": "commonjs",
-  "files": ["dist", "LICENSE", "README.md", "examples", "branding"],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "examples",
+    "branding"
+  ],
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["node-red", "node-red-contrib", "plaiiinlight", "plaiiinlightos", "esp32", "led", "mqtt", "ws2812"],
+  "keywords": [
+    "node-red",
+    "node-red-contrib",
+    "plaiiinlight",
+    "plaiiinlightos",
+    "esp32",
+    "led",
+    "mqtt",
+    "ws2812"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nebeleben/plaiiin-light-nodered.git"
