@@ -4,8 +4,7 @@
   "description": "Node-RED palette for PlaiiinLightOS lamps — config, command and state nodes over local MQTT.",
   "license": "Apache-2.0",
   "type": "commonjs",
-  "main": "dist/index.js",
-  "files": ["dist", "LICENSE", "README.md", "examples"],
+  "files": ["dist", "LICENSE", "README.md", "examples", "branding"],
   "engines": {
     "node": ">=18"
   },
