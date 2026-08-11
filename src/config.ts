@@ -14,38 +14,19 @@
 // dependent nodes and the editor's lamp-picker panels can list known lamps
 // without a separate discovery mechanism.
 //
-// No `@types/node-red` package exists for this Node-RED version, and pulling
-// in a hand-rolled community one isn't worth it for the handful of runtime
-// calls this file makes — so the RED/runtime shapes below are minimal,
-// structural interfaces covering only what's actually called.
+// The RED/runtime type shims (including this node's own public shape,
+// `PlaiiinlightConfigNode`) live in ./red — see that file's header for why
+// (`export =` below forbids named exports from this file, so dependent
+// nodes can't import these shapes from here).
 
 import mqtt, { type MqttClient } from 'mqtt';
 import { LampRegistry } from './discovery';
-
-interface NodeRedNode {
-  id: string;
-  credentials?: { username?: string; password?: string };
-  on(event: 'close', listener: (done: () => void) => void): void;
-  on(event: string, listener: (...args: unknown[]) => void): void;
-  emit(event: string, ...args: unknown[]): void;
-  log(msg: string): void;
-  warn(msg: string): void;
-  error(msg: string, msg2?: unknown): void;
-}
-
-interface NodeRedRuntime {
-  nodes: {
-    createNode(node: unknown, config: unknown): void;
-    registerType(type: string, ctor: unknown, opts?: unknown): void;
-    getNode(id: string): unknown;
-  };
-  httpAdmin: {
-    get(path: string, ...handlers: unknown[]): void;
-  };
-  auth: {
-    needsPermission(permission: string): unknown;
-  };
-}
+import {
+  STATUS_EVENT,
+  type ConnectionStatusEvent,
+  type NodeRedRuntime,
+  type PlaiiinlightConfigNode,
+} from './red';
 
 interface ConfigNodeDef {
   host: string;
@@ -54,27 +35,8 @@ interface ConfigNodeDef {
   prefix?: string;
 }
 
-/** Connection lifecycle broadcast to dependent nodes via the `plaiiinlight:status` event. */
-type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
-interface ConnectionStatusEvent {
-  status: ConnectionStatus;
-  error?: string;
-}
-
-const STATUS_EVENT = 'plaiiinlight:status';
 const DEFAULT_PORT = 1883;
 const DEFAULT_PREFIX = 'plaiiinlight';
-
-interface PlaiiinlightConfigNode extends NodeRedNode {
-  host: string;
-  port: number;
-  tls: boolean;
-  prefix: string;
-  /** Returns the shared registry (always available, even before the client connects). */
-  getRegistry(): LampRegistry;
-  /** Returns the shared MQTT client, connecting lazily on first call. */
-  getClient(): MqttClient;
-}
 
 function buildBrokerUrl(host: string, port: number, tls: boolean): string {
   return `${tls ? 'mqtts' : 'mqtt'}://${host}:${port}`;

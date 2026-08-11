@@ -17,8 +17,10 @@ helper.init(require.resolve('node-red'));
 // same function via esModuleInterop (this file only executes through
 // vitest/esbuild, so it never depends on the built dist/config.js).
 import configNode from '../src/config';
+import commandNode from '../src/command';
 
 const CONFIG_NODE_TYPE = 'plaiiinlight-config';
+const COMMAND_NODE_TYPE = 'plaiiinlight-command';
 
 describe('plaiiinlight-config node', () => {
   let broker: InstanceType<typeof Aedes>;
@@ -128,5 +130,119 @@ describe('plaiiinlight-config node', () => {
 
     await helper.unload();
     expect(client.disconnecting || client.disconnected).toBe(true);
+  });
+});
+
+describe('plaiiinlight-command node', () => {
+  let broker: InstanceType<typeof Aedes>;
+  let server: Server;
+  let port: number;
+
+  beforeEach(async () => {
+    broker = new Aedes();
+    server = createServer(broker.handle);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (address === null || typeof address === 'string') {
+      throw new Error('expected an AddressInfo from the ephemeral listener');
+    }
+    port = address.port;
+  });
+
+  afterEach(async () => {
+    await helper.unload();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => broker.close(() => resolve()));
+  });
+
+  function testFlow(command: Record<string, unknown>) {
+    return [
+      {
+        id: 'n1',
+        type: CONFIG_NODE_TYPE,
+        name: 'test broker',
+        host: '127.0.0.1',
+        port,
+        tls: false,
+        prefix: 'plaiiinlight',
+      },
+      {
+        id: 'n2',
+        type: COMMAND_NODE_TYPE,
+        name: 'test command',
+        config: 'n1',
+        wires: [[]],
+        ...command,
+      },
+    ];
+  }
+
+  // The shared MQTT client connects lazily (mqtt.js queues publishes made
+  // before 'connect' and flushes them once it's up), so wait for the exact
+  // topic to land on the broker instead of racing a fixed delay.
+  function waitForPublish(topic: string): Promise<string> {
+    return new Promise<string>((resolve) => {
+      const onPublish = (packet: { topic: string; payload: Buffer }) => {
+        if (packet.topic === topic) {
+          broker.removeListener('publish', onPublish);
+          resolve(packet.payload.toString());
+        }
+      };
+      broker.on('publish', onPublish);
+    });
+  }
+
+  it('maps a color msg through payload.ts and publishes HSV to <prefix>/<lamp>/color/set', async () => {
+    await helper.load([configNode, commandNode], testFlow({ lamp: 'tower8', action: 'color', usePayload: true }), {});
+    const n2 = helper.getNode('n2') as any;
+
+    const published = waitForPublish('plaiiinlight/tower8/color/set');
+    n2.receive({ payload: '#ff0000' });
+
+    expect(await published).toBe('0,100,100');
+  });
+
+  it('maps a power msg to "1" and publishes to <prefix>/<lamp>/power/set', async () => {
+    await helper.load([configNode, commandNode], testFlow({ lamp: 'tower8', action: 'power', usePayload: true }), {});
+    const n2 = helper.getNode('n2') as any;
+
+    const published = waitForPublish('plaiiinlight/tower8/power/set');
+    n2.receive({ payload: true });
+
+    expect(await published).toBe('1');
+  });
+
+  it('publishes an empty payload to <prefix>/<lamp>/effect/next for effect-next', async () => {
+    await helper.load([configNode, commandNode], testFlow({ lamp: 'tower8', action: 'effect-next' }), {});
+    const n2 = helper.getNode('n2') as any;
+
+    const published = waitForPublish('plaiiinlight/tower8/effect/next');
+    n2.receive({});
+
+    expect(await published).toBe('');
+  });
+
+  it('on an invalid color value, sets an error status and publishes nothing', async () => {
+    await helper.load([configNode, commandNode], testFlow({ lamp: 'tower8', action: 'color', usePayload: true }), {});
+    const n2 = helper.getNode('n2') as any;
+
+    const statusEvents: Array<{ fill?: string }> = [];
+    n2.on('call:status', (call: { args: [{ fill?: string }] }) => statusEvents.push(call.args[0]));
+
+    let publishedToLamp = false;
+    const onPublish = (packet: { topic: string }) => {
+      if (packet.topic.startsWith('plaiiinlight/tower8/')) publishedToLamp = true;
+    };
+    broker.on('publish', onPublish);
+
+    n2.receive({ payload: 'not-a-color' });
+
+    await vi.waitFor(() => {
+      expect(statusEvents.length).toBeGreaterThan(0);
+    });
+
+    broker.removeListener('publish', onPublish);
+    expect(statusEvents[0]).toEqual(expect.objectContaining({ fill: 'red' }));
+    expect(publishedToLamp).toBe(false);
   });
 });
