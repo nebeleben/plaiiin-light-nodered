@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/nebeleben/plaiiin-light-nodered/main/branding/icon.png" width="88" height="88" alt="PlaiiinLight logo">
 </p>
 
-<h1 align="center">node-red-contrib-plaiiinlight</h1>
+<h1 align="center">PlaiiinLight for Node-RED</h1>
 
 Node-RED palette for [PlaiiinLightOS](https://github.com/nebeleben/plaiiin-light)
 lamps — power, color, brightness, mode and effect commands, plus live state
@@ -140,13 +140,6 @@ convenience of friendly inputs, shared connection management, and the lamp
 picker; use core MQTT nodes if you'd rather not add a dependency, or need a
 topic shape this package doesn't cover.
 
-## Not in v1
-
-This package only covers the firmware's plain-MQTT surface (power, color,
-brightness, mode, effect next/prev, and state). OTA updates, canvas/draw,
-and swarm sync are HTTP/BLE features of PlaiiinLightOS, not exposed over
-MQTT, so they're out of scope here.
-
 ## Example flow
 
 [`examples/flows.json`](./examples/flows.json) — importable via the Node-RED
@@ -160,30 +153,7 @@ editor's menu → Import. It wires up:
 Edit the included `plaiiinlight-config` node's host to point at your broker
 (it ships with a placeholder host and no credentials) before deploying.
 
-## Bench smoke checklist
-
-Run through this against a real lamp before trusting a change:
-
-1. Flash/claim a lamp (any PlaiiinLight app), and set its MQTT broker
-   host/port from the lamp's web portal or the app — note the lamp's MQTT
-   node name (shown alongside its mDNS name).
-2. In Node-RED, drop a `plaiiinlight-config` node, point it at the same
-   broker, and deploy.
-3. Add a `plaiiinlight-command` node (or import `examples/flows.json`), set
-   its Lamp to that node name, action `color`, `usePayload` checked. Inject
-   a `"#hex"` string and confirm the lamp's color changes.
-4. Add a `plaiiinlight-state` node for the same lamp, wired to a `debug`
-   node. Confirm it emits an initial message and then one per change (toggle
-   power/brightness from the lamp's own app and watch it arrive in Node-RED).
-5. Try `effect-next`/`effect-prev` and confirm the lamp's active effect
-   advances.
-
-## Development
-
-    npm install
-    npm run build   # tsc -> dist/, then copies editor/*.html -> dist/
-    npm test         # vitest
-
 ## License
 
-Apache-2.0. See [LICENSE](./LICENSE).
+Apache-2.0. The plugin talks to the lamp's open, documented MQTT interface from the
+[PlaiiinLightOS firmware](https://github.com/nebeleben/plaiiin-light).
