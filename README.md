@@ -1,4 +1,8 @@
-# node-red-contrib-plaiiinlight
+<p align="center">
+  <img src="https://raw.githubusercontent.com/nebeleben/plaiiin-light-nodered/main/branding/icon.png" width="88" height="88" alt="PlaiiinLight logo">
+</p>
+
+<h1 align="center">node-red-contrib-plaiiinlight</h1>
 
 Node-RED palette for [PlaiiinLightOS](https://github.com/nebeleben/plaiiin-light)
 lamps — power, color, brightness, mode and effect commands, plus live state
