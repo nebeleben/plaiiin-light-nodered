@@ -1,0 +1,131 @@
+[
+    {
+        "id": "f1a1000000000001",
+        "type": "tab",
+        "label": "PlaiiinLightOS demo",
+        "disabled": false,
+        "info": "Demo flow for node-red-contrib-plaiiinlight.\n\nBefore deploying: edit the plaiiinlight-config node's Broker host to point\nat your MQTT broker, and set each plaiiinlight-command/plaiiinlight-state\nnode's Lamp field to a real lamp's MQTT node name.\n\n- inject (#ff8800) -> plaiiinlight-command (color, uses msg.payload)\n- plaiiinlight-state (lamp) -> debug\n- inject -> plaiiinlight-command (effect-next)",
+        "env": []
+    },
+    {
+        "id": "f1a1000000000010",
+        "type": "plaiiinlight-config",
+        "name": "PlaiiinLightOS broker",
+        "host": "127.0.0.1",
+        "port": 1883,
+        "tls": false,
+        "prefix": "plaiiinlight"
+    },
+    {
+        "id": "f1a1000000000101",
+        "type": "inject",
+        "z": "f1a1000000000001",
+        "name": "orange (#ff8800)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "#ff8800",
+        "payloadType": "str",
+        "x": 180,
+        "y": 100,
+        "wires": [
+            [
+                "f1a1000000000102"
+            ]
+        ]
+    },
+    {
+        "id": "f1a1000000000102",
+        "type": "plaiiinlight-command",
+        "z": "f1a1000000000001",
+        "name": "set color",
+        "config": "f1a1000000000010",
+        "lamp": "tower8",
+        "action": "color",
+        "value": "",
+        "usePayload": true,
+        "x": 430,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "f1a1000000000201",
+        "type": "plaiiinlight-state",
+        "z": "f1a1000000000001",
+        "name": "tower8 state",
+        "config": "f1a1000000000010",
+        "lamp": "tower8",
+        "x": 180,
+        "y": 200,
+        "wires": [
+            [
+                "f1a1000000000202"
+            ]
+        ]
+    },
+    {
+        "id": "f1a1000000000202",
+        "type": "debug",
+        "z": "f1a1000000000001",
+        "name": "lamp state",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 430,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "f1a1000000000301",
+        "type": "inject",
+        "z": "f1a1000000000001",
+        "name": "next effect",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 170,
+        "y": 300,
+        "wires": [
+            [
+                "f1a1000000000302"
+            ]
+        ]
+    },
+    {
+        "id": "f1a1000000000302",
+        "type": "plaiiinlight-command",
+        "z": "f1a1000000000001",
+        "name": "effect next",
+        "config": "f1a1000000000010",
+        "lamp": "tower8",
+        "action": "effect-next",
+        "value": "",
+        "usePayload": false,
+        "x": 430,
+        "y": 300,
+        "wires": [
+            []
+        ]
+    }
+]

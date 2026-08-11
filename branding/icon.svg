@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Node-RED flow — two nodes joined by a wire">
+  <defs>
+    <pattern id="g-nr" width="1" height="1" patternUnits="userSpaceOnUse">
+      <circle cx="0.5" cy="0.5" r="0.13" fill="#fff" opacity="0.08"/>
+    </pattern>
+  </defs>
+  <rect width="16" height="16" rx="3" fill="#1a1a1a"/>
+  <rect width="16" height="16" rx="3" fill="url(#g-nr)"/>
+  <g fill="#e8443b">
+    <rect x="1.6" y="6" width="3.4" height="4" rx="1"/>
+    <rect x="4.9" y="7.5" width="0.9" height="1" rx="0.3"/>
+    <rect x="5.8" y="7.7" width="4.4" height="0.6" rx="0.3"/>
+    <rect x="10.2" y="7.5" width="0.9" height="1" rx="0.3"/>
+    <rect x="11" y="6" width="3.4" height="4" rx="1"/>
+  </g>
+</svg>
