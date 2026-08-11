@@ -42,7 +42,7 @@ Editor fields:
 | Broker host | *(required)* | hostname or IP of the MQTT broker. |
 | Port | `1883` | |
 | Use TLS | off | connects `mqtts://` instead of `mqtt://` when checked. |
-| Topic prefix | `plaiiinlight` | must match the firmware's prefix (the firmware default is also `plaiiinlight`). |
+| Topic prefix | `plaiiinlight` | must match the firmware's prefix (the firmware uses the fixed literal `plaiiinlight`). |
 | Username / Password | *(optional)* | broker credentials, stored in Node-RED's encrypted credential store — never written into exported flow JSON. |
 
 On connect it subscribes to `<prefix>/+/status` (every lamp's retained
@@ -96,7 +96,7 @@ msg = {
   payload: {
     online: true,        // from the retained status/LWT topic
     power: true,
-    color: { h: 24, s: 100, v: 100, r: 255, g: 108, b: 0, hex: "#ff6c00" },
+    color: { h: 24, s: 100, v: 100, r: 255, g: 102, b: 0, hex: "#ff6600" },
     brightness: 200,
     mode: "color",        // "color" | "js" | "stream" — whatever the firmware publishes
   },
